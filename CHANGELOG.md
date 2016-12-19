@@ -3,7 +3,7 @@ clcache changelog
 
 ## Upcoming release
 
- * Nothing yet!
+ * Bugfix: Permit interrupting clcache again via Ctrl+C again (GH #261).
 
 ## clcache 4.0.0 (2016-12-15)
 
