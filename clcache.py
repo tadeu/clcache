@@ -116,6 +116,18 @@ def normalizeBaseDir(baseDir):
         return None
 
 
+@contextlib.contextmanager
+def blockedSignals(signals=None):
+    signals = signals or [signal.SIGINT, signal.SIGTERM]
+
+    handlers = [signal.signal(sig, signal.SIG_IGN) for sig in signals]
+    try:
+        yield
+    finally:
+        for sig, handler in zip(signals, handlers):
+            signal.signal(sig, handler)
+
+
 class IncludeNotFoundException(Exception):
     pass
 
