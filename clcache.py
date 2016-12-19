@@ -528,23 +528,24 @@ class Cache(object):
         if currentSize < maximumSize:
             return
 
-        # Free at least 10% to avoid cleaning up too often which
-        # is a big performance hit with large caches.
-        effectiveMaximumSizeOverall = maximumSize * 0.9
+        with blockedSignals():
+            # Free at least 10% to avoid cleaning up too often which
+            # is a big performance hit with large caches.
+            effectiveMaximumSizeOverall = maximumSize * 0.9
 
-        # Split limit in manifests (10 %) and objects (90 %)
-        effectiveMaximumSizeManifests = effectiveMaximumSizeOverall * 0.1
-        effectiveMaximumSizeObjects = effectiveMaximumSizeOverall - effectiveMaximumSizeManifests
+            # Split limit in manifests (10 %) and objects (90 %)
+            effectiveMaximumSizeManifests = effectiveMaximumSizeOverall * 0.1
+            effectiveMaximumSizeObjects = effectiveMaximumSizeOverall - effectiveMaximumSizeManifests
 
-        # Clean manifests
-        currentSizeManifests = self.manifestRepository.clean(effectiveMaximumSizeManifests)
+            # Clean manifests
+            currentSizeManifests = self.manifestRepository.clean(effectiveMaximumSizeManifests)
 
-        # Clean artifacts
-        currentCompilerArtifactsCount, currentCompilerArtifactsSize = self.compilerArtifactsRepository.clean(
-            effectiveMaximumSizeObjects)
+            # Clean artifacts
+            currentCompilerArtifactsCount, currentCompilerArtifactsSize = self.compilerArtifactsRepository.clean(
+                effectiveMaximumSizeObjects)
 
-        stats.setCacheSize(currentCompilerArtifactsSize + currentSizeManifests)
-        stats.setNumCacheEntries(currentCompilerArtifactsCount)
+            stats.setCacheSize(currentCompilerArtifactsSize + currentSizeManifests)
+            stats.setNumCacheEntries(currentCompilerArtifactsCount)
 
 
 class PersistentJSONDict(object):
@@ -1410,15 +1411,7 @@ def createManifestEntry(manifestHash, includePaths):
     return ManifestEntry(safeIncludes, includesContentHash, cachekey)
 
 
-def installSignalHandlers():
-    # Ignore Ctrl-C and SIGTERM signals to avoid corrupting the cache
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
 def main():
-
-    installSignalHandlers()
-
     if len(sys.argv) == 2 and sys.argv[1] == "--help":
         print("""
 clcache.py v{}
@@ -1627,7 +1620,7 @@ def processDirect(cache, objectFile, compiler, cmdLine, sourceFile):
         includePaths, compilerOutput = parseIncludesSet(compilerResult[1], sourceFile, stripIncludes)
         compilerResult = (compilerResult[0], compilerOutput, compilerResult[2])
 
-    with manifestSection.lock:
+    with manifestSection.lock, blockedSignals():
         if artifactSection is not None:
             return ensureArtifactsExist(cache, artifactSection, cachekey, unusableManifestMissReason,
                                         objectFile, compilerResult)
@@ -1654,8 +1647,9 @@ def processNoDirect(cache, objectFile, compiler, cmdLine, environment):
 
     compilerResult = invokeRealCompiler(compiler, cmdLine, captureOutput=True, environment=environment)
 
-    return ensureArtifactsExist(cache, artifactSection, cachekey, Statistics.registerCacheMiss,
-                                objectFile, compilerResult)
+    with blockedSignals():
+        return ensureArtifactsExist(cache, artifactSection, cachekey, Statistics.registerCacheMiss,
+                                    objectFile, compilerResult)
 
 
 def ensureArtifactsExist(cache, section, cachekey, reason, objectFile, compilerResult, extraCallable=None):
